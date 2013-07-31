@@ -1,7 +1,5 @@
 <?php
 
-use WordPress\Basecamp\OAuth;
-
 /**
  * This class handles the actual oAuth authentication and integration features
  * of the plugin.
