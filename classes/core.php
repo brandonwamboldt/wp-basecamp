@@ -33,8 +33,14 @@ class WordPressBasecampCore {
    * Setup login form or redirect user.
    */
   public function login_init() {
-    // If requesting to not auto-redirect, then add a link to the login form.
-    if ( ! apply_filters( 'wp_basecamp_auto_redirect_login', true ) || isset( $_GET['code'] ) ) {
+    if (
+      // If requesting to not auto-redirect, then add a link to the login form.
+      ! apply_filters( 'wp_basecamp_auto_redirect_login', true )
+      // If we're coming back from basecamp w/ the code, don't redirect
+      || isset( $_GET['code'] )
+      // If we're in the middle of logging in traditionally, don't redirect
+      || ! empty( $_POST )
+    ) {
       // Add the link to the sign-in page
       return add_action( 'login_form', array( $this, 'printLoginLink' ) );
     }
