@@ -142,6 +142,7 @@ class WordPressBasecampCore {
       if ($account['id'] == $organization_id) {
         $in_organization = true;
         $api_href        = $account['href'];
+        $user_level      = $bc_user_level;
         break;
       }
     }
@@ -173,7 +174,7 @@ class WordPressBasecampCore {
       'last_name'    => $last_name,
       'nickname'     => $full_name,
       'display_name' => $full_name,
-      'role'         => 1 == $response['result']['admin'] ? $bc_admin_level : $bc_user_level,
+      'role'         => 1 == $response['result']['admin'] ? $bc_admin_level : $user_level,
     );
 
     $new_user_id = wp_insert_user( $userdata );
@@ -187,7 +188,7 @@ class WordPressBasecampCore {
   }
 
   /**
-   * If we're on the WordPress login screen, add a Bascamp login link.
+   * If we're on the WordPress login screen, add a Basecamp login link.
    */
   public function printLoginLink() {
     if ( $client = $this->get_client() ) {
