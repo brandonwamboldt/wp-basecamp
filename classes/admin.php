@@ -36,8 +36,8 @@ class WordPressBasecampAdmin
     // Get the current settings
     $client_id       = get_option( 'wp:basecamp:client_id' );
     $client_secret   = get_option( 'wp:basecamp:client_secret' );
-    $auth_endpoint   = get_option( 'wp:basecamp:auth_endpoint', 'https://launchpad.37signals.com/authorization/new' );
-    $token_endpoint  = get_option( 'wp:basecamp:token_endpoint', 'https://launchpad.37signals.com/authorization/token' );
+    $auth_endpoint   = get_option( 'wp:basecamp:auth_endpoint', WP_BASECAMP_AUTH_ENDPOINT );
+    $token_endpoint  = get_option( 'wp:basecamp:token_endpoint', WP_BASECAMP_TOKEN_ENDPOINT );
     $organization_id = get_option( 'wp:basecamp:organization_id' );
     $redirect_uri    = wp_login_url();
 

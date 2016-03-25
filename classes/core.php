@@ -65,7 +65,7 @@ class WordPressBasecampCore
     $client->setAccessToken($response['result']['access_token']);
 
     // Get authorization info
-    $response = $client->fetch('https://launchpad.37signals.com/authorization.json');
+    $response = $client->fetch( WP_BASECAMP_AUTH_INFO_ENDPOINT );
 
     // Get the user's email
     $user_email = $response['result']['identity']['email_address'];
@@ -174,11 +174,11 @@ class WordPressBasecampCore
   }
 
   public function get_auth_endpoint() {
-    return get_option( 'wp:basecamp:auth_endpoint', 'https://launchpad.37signals.com/authorization/new' );
+    return get_option( 'wp:basecamp:auth_endpoint', WP_BASECAMP_AUTH_ENDPOINT );
   }
 
   public function get_token_endpoint() {
-    return get_option( 'wp:basecamp:token_endpoint', 'https://launchpad.37signals.com/authorization/token' );
+    return get_option( 'wp:basecamp:token_endpoint', WP_BASECAMP_TOKEN_ENDPOINT );
   }
 
 }
