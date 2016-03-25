@@ -6,28 +6,80 @@
  *
  * @author Brandon Wamboldt <brandon.wamboldt@gmail.com>
  */
-class WordPressBasecampCore
-{
+class WordPressBasecampCore {
   /**
    * Constructor.
    */
-  public function __construct()
-  {
+  public function __construct() {
+    add_action( 'init', array( $this, 'register_session' ) );
+    add_action( 'login_init', array( $this, 'login_init' ) );
+    add_filter( 'login_redirect', array( $this, 'redirect_after_login' ), 20, 3 );
+
     if ( isset( $_GET['code'] ) ) {
-      // If we havea response back from basecamp, attempt to log the user in.
       add_filter( 'authenticate', array( $this, 'doOAuthLogin' ), 30, 3 );
     }
+  }
 
-    // Add the link to the sign-in page
+  /**
+   * Add the hook that starts the SESSION. SESSION will be used to store redirects.
+   */
+  function register_session() {
+    if ( ( function_exists( 'session_status' ) && PHP_SESSION_ACTIVE !== session_status() ) || ! session_id() ) {
+      session_start();
+    }
+  }
+
+  /**
+   * Setup login form or redirect user.
+   */
+  public function login_init() {
+    // If requesting to not auto-redirect, then add a link to the login form.
+    if ( ! apply_filters( 'wp_basecamp_auto_redirect_login', true ) || isset( $_GET['code'] ) ) {
+      // Add the link to the sign-in page
+      return add_action( 'login_form', array( $this, 'printLoginLink' ) );
+    }
+
+    $args = array_filter( $_GET );
+
+    // wanting to login (and redirect param is set), then send them to basecamp.
+    if ( empty( $args ) || ( 1 === count( $args ) && isset( $args['redirect_to'] ) ) ) {
+      $this->redirect_to_auth_url();
+    }
+
+    // If logging out...
+    if ( isset( $args['loggedout'] ) && 'true' === $args['loggedout'] ) {
+
+      // We'll redirect to the requested location, or back to the homepage
+      $redirect = isset( $args['redirect_to'] )
+        ? esc_url_raw( $args['redirect_to'] )
+        : site_url();
+
+      wp_redirect( $redirect );
+      exit;
+    }
+
+    // Ok, not logging out, but we shouldn't auto-redirect them, so add the login form link.
     add_action( 'login_form', array( $this, 'printLoginLink' ) );
   }
 
   /**
-   * If we're on the WordPress login, do OAuth2 login via Basecamp.
+   * Redirect user back to original location, if we have it.
    */
-  public function doOAuthLogin( $user, $username, $password )
-  {
+  public function redirect_after_login( $redirect_to, $requested_redirect_to, $user ) {
+    if ( is_a( $user, 'WP_User' ) && isset( $_SESSION['redirect_to'] ) ) {
+      $redirect_to = esc_url_raw( $_SESSION['redirect_to'] );
+      // Remove chances of residual redirects when logging in.
+      unset( $_SESSION['redirect_to'] );
+    }
 
+    return $redirect_to;
+  }
+
+  /**
+   * If we have a response back from basecamp, attempt to log the user in
+   * via Basecamp OAuth2.
+   */
+  public function doOAuthLogin( $user, $username, $password ) {
     // Don't re-authenticate if already authenticated
     if ( is_a( $user, 'WP_User' ) ) {
       return $user;
@@ -137,9 +189,9 @@ class WordPressBasecampCore
   /**
    * If we're on the WordPress login screen, add a Bascamp login link.
    */
-  public function printLoginLink()
-  {
+  public function printLoginLink() {
     if ( $client = $this->get_client() ) {
+
       $login_url = $this->get_auth_url();
 
       require __DIR__ . '/../views/login/button.php';
@@ -165,7 +217,21 @@ class WordPressBasecampCore
     return new OAuth2\Client($client_id, $client_secret);
   }
 
+  public function redirect_to_auth_url() {
+    // Ok, we're clear, let's auto-redirect them.
+    if ( $client = $this->get_client() ) {
+      wp_redirect( $this->get_auth_url() );
+      exit;
+    }
+  }
+
   public function get_auth_url() {
+    if ( isset( $_GET['redirect_to'] ) && $_GET['redirect_to'] ) {
+      $_SESSION['redirect_to'] = esc_url( $_GET['redirect_to'] );
+    } else {
+      unset( $_SESSION['redirect_to'] );
+    }
+
     return $this->get_client()->getAuthenticationUrl(
       $this->get_auth_endpoint(),
       wp_login_url(),
