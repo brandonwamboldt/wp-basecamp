@@ -13,113 +13,172 @@ class WordPressBasecampCore
    */
   public function __construct()
   {
-    add_action('wp_loaded', array($this, 'doOAuthLogin'));
+    if ( isset( $_GET['code'] ) ) {
+      // If we havea response back from basecamp, attempt to log the user in.
+      add_filter( 'authenticate', array( $this, 'doOAuthLogin' ), 30, 3 );
+    }
+
+    // Add the link to the sign-in page
+    add_action( 'login_form', array( $this, 'printLoginLink' ) );
   }
 
   /**
    * If we're on the WordPress login, do OAuth2 login via Basecamp.
    */
-  public function doOAuthLogin()
+  public function doOAuthLogin( $user, $username, $password )
   {
-    if (!function_exists('login_header')) {
-      return;
+
+    // Don't re-authenticate if already authenticated
+    if ( is_a( $user, 'WP_User' ) ) {
+      return $user;
     }
 
-    // Is the user in our organization?
+    $client = $this->get_client();
+
+    // No oauth client? Don't bother.
+    if ( ! $client ) {
+      return $user;
+    }
+
+    // Request an authorization token
+    $response = $client->getAccessToken(
+      $this->get_token_endpoint(),
+      'authorization_code',
+      // Token request parameters
+      array(
+        'code'          => $_GET['code'],
+        'redirect_uri'  => wp_login_url(),
+        'type'          => 'web_server',
+        'client_secret' => get_option( 'wp:basecamp:client_secret' )
+      )
+    );
+
+    // If the access token failed, try again
+    if ($response['code'] == 400) {
+      wp_redirect( $this->get_auth_url() );
+      exit;
+    }
+
+    $organization_id = get_option( 'wp:basecamp:organization_id' );
+
+    // Set access token
+    $client->setAccessToken($response['result']['access_token']);
+
+    // Get authorization info
+    $response = $client->fetch('https://launchpad.37signals.com/authorization.json');
+
+    // Get the user's email
+    $user_email = $response['result']['identity']['email_address'];
+    $first_name = $response['result']['identity']['first_name'];
+    $last_name  = $response['result']['identity']['last_name'];
+    $full_name  = $first_name . ' ' . $last_name;
+
+    // The default WP user level for Basecamp users logging in who are NOT members of your Basecamp org.
+    // Use add_filter( 'wp_basecamp_default_user_level', '__return_false' ); to disable non-organization users.
+    $user_level = apply_filters( 'wp_basecamp_default_user_level', 'subscriber' );
+
+    // The default WP user level for members of your Basecamp org.
+    $bc_user_level = apply_filters( 'wp_basecamp_default_organization_user_level', 'contributor' );
+
+    // The default WP user level for admins of your Basecamp org.
+    $bc_admin_level = apply_filters( 'wp_basecamp_user_level_organization_admin', 'administrator' );
+
     $in_organization = false;
     $api_href        = '';
-
-    // OAuth2 Parameters
-    $client_id       = get_option('wp:basecamp:client_id');
-    $client_secret   = get_option('wp:basecamp:client_secret');
-    $auth_endpoint   = get_option('wp:basecamp:auth_endpoint');
-    $token_endpoint  = get_option('wp:basecamp:token_endpoint');
-    $organization_id = get_option('wp:basecamp:organization_id');
-    $redirect_uri    = wp_login_url();
-
-    // OAuth2 client
-    $client = new OAuth2\Client($client_id, $client_secret);
-
-    // Check authentication
-    if (!isset($_GET['code'])) {
-      wp_redirect($client->getAuthenticationUrl($auth_endpoint, $redirect_uri, array('type' => 'web_server')));
-      exit;
-    } else {
-      // Token request parameters
-      $params   = array(
-        'code'          => $_GET['code'],
-        'redirect_uri'  => $redirect_uri,
-        'type'          => 'web_server',
-        'client_secret' => $client_secret
-      );
-
-      // Request an authorization token
-      $response = $client->getAccessToken($token_endpoint, 'authorization_code', $params);
-
-      // If the access token failed, try again
-      if ($response['code'] == 400) {
-        wp_redirect($client->getAuthenticationUrl($auth_endpoint, $redirect_uri, array('type' => 'web_server')));
-        exit;
-      }
-
-      // Set access token
-      $client->setAccessToken($response['result']['access_token']);
-
-      // Get authorization info
-      $response = $client->fetch('https://launchpad.37signals.com/authorization.json');
-
-      // Get the user's email
-      $user_email = $response['result']['identity']['email_address'];
-      $first_name = $response['result']['identity']['first_name'];
-      $last_name  = $response['result']['identity']['last_name'];
-      $full_name  = $first_name . ' ' . $last_name;
-
-      // Is the user a member of our organization?
-      foreach ($response['result']['accounts'] as $account) {
-        if ($account['id'] == $organization_id) {
-          $in_organization = true;
-          $api_href        = $account['href'];
-          break;
-        }
-      }
-
-      if (!$in_organization) {
-        wp_redirect(site_url('?not_in_organization=true'));
-        exit;
-      }
-
-      // Does the user exist
-      $user = get_user_by('email', $user_email);
-
-      if ($user) {
-        // Log the user in
-        wp_set_auth_cookie($user->ID, true);
-        wp_redirect(site_url());
-        exit;
-      } else {
-        // Get more info about the user
-        $response = $client->fetch($api_href . '/people/me.json', array(), 'GET', array(
-          'User-Agent' => sprintf('%s (%s)', get_bloginfo('name'), get_bloginfo('admin_email'))
-        ));
-
-        // Create a new user
-        $user_id = wp_create_user($user_email, uniqid(), $user_email);
-
-        // Set the user's information
-        wp_update_user(array(
-          'ID'           => $user_id,
-          'first_name'   => $first_name,
-          'last_name'    => $last_name,
-          'display_name' => $full_name,
-          'nickname'     => $full_name,
-          'role'         => $response['result']['admin'] == 1 ? 'administrator' : 'subscriber'
-        ));
-
-        // Log the user in
-        wp_set_auth_cookie($user_id, true);
-        wp_redirect(site_url());
-        exit;
+    // Is the user in our organization?
+    foreach ($response['result']['accounts'] as $account) {
+      if ($account['id'] == $organization_id) {
+        $in_organization = true;
+        $api_href        = $account['href'];
+        break;
       }
     }
+
+    if ( ! $in_organization && ! $user_level ) {
+      return new WP_Error( 'wp_basecamp:not_in_org', 'Sorry, you are not in the correct Basecamp organization.' );
+    }
+
+    // Does the user exist
+    $user = get_user_by( 'email', $user_email );
+
+    // If we have a user, log them in
+    if ( ! empty( $user ) && is_a( $user, 'WP_User' ) ) {
+      return $user;
+    }
+
+    // Get more info about the user
+    $response = $client->fetch( $api_href . '/people/me.json', array(), 'GET', array(
+      'User-Agent' => sprintf('%s (%s)', get_bloginfo('name'), get_bloginfo('admin_email') )
+    ));
+
+    // Create a new user
+    // Setup the minimum required user data
+    $userdata = array(
+      'user_login'   => wp_slash( $user_email ),
+      'user_email'   => wp_slash( $user_email ),
+      'user_pass'    => wp_generate_password( 20, true ),
+      'first_name'   => $first_name,
+      'last_name'    => $last_name,
+      'nickname'     => $full_name,
+      'display_name' => $full_name,
+      'role'         => 1 == $response['result']['admin'] ? $bc_admin_level : $bc_user_level,
+    );
+
+    $new_user_id = wp_insert_user( $userdata );
+
+    if ( is_wp_error( $new_user_id ) ) {
+      return $new_user_id;
+    }
+
+    // Log the user in
+    return new WP_User( $new_user_id );
   }
+
+  /**
+   * If we're on the WordPress login screen, add a Bascamp login link.
+   */
+  public function printLoginLink()
+  {
+    if ( $client = $this->get_client() ) {
+      $login_url = $this->get_auth_url();
+
+      require __DIR__ . '/../views/login/button.php';
+    }
+  }
+
+  public function get_client() {
+    static $client = null;
+    if ( null !== $client ) {
+      return $client;
+    }
+
+    // OAuth2 Parameters
+    $client_id     = get_option( 'wp:basecamp:client_id' );
+    $client_secret = get_option( 'wp:basecamp:client_secret' );
+
+    // No OAuth parameters? bail.
+    if ( ! $client_id || ! $client_secret ) {
+      return false;
+    }
+
+    // OAuth2 client
+    return new OAuth2\Client($client_id, $client_secret);
+  }
+
+  public function get_auth_url() {
+    return $this->get_client()->getAuthenticationUrl(
+      $this->get_auth_endpoint(),
+      wp_login_url(),
+      array('type' => 'web_server')
+    );
+  }
+
+  public function get_auth_endpoint() {
+    return get_option( 'wp:basecamp:auth_endpoint', 'https://launchpad.37signals.com/authorization/new' );
+  }
+
+  public function get_token_endpoint() {
+    return get_option( 'wp:basecamp:token_endpoint', 'https://launchpad.37signals.com/authorization/token' );
+  }
+
 }

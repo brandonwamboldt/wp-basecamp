@@ -2,7 +2,7 @@
 
 /*
  * Plugin Name: Basecamp Integration
- * Author:      Brandon Wamboldt
+ * Author:      Brandon Wamboldt, Justin Sternberg
  * Author URI:  http://brandonwamboldt.ca/
  * Version:     1.0
  * Description: Provides integration with 37signals Basecamp (oAuth login and user syncing)
