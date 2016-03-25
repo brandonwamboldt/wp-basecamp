@@ -8,8 +8,7 @@ All OAuth2 options are controlled via the `Settings > Basecamp Integration` page
 How Does It Work?
 -----------------
 
-Once the settings are configured, when users go to the WordPress login page (http://example.com/wp-login.php), they will be provided with a "Sign in with your Basecamp account" link, which when clicked will take the user to Basecamp for authentication. After login, they will be redirected back and authenticated.
-
+Once the settings are configured, when users go to the WordPress login page (http://example.com/wp-login.php), they will be redirected immediately to Basecamp for authentication. After login, they will be redirected back and authenticated.
 
 If the user doesn't exist (checks against the email address), a new user will be added with the name & email provided by Basecamp.
 
@@ -43,6 +42,12 @@ add_filter( 'wp_basecamp_default_user_level', '__return_false' );
 ```
 
 Keep in mind, these roles will be applied when the user first logs in via Basecamp and their user is created in WordPress. After that first login, you can change their user-level, and it will apply for subsequent logins.
+
+There is also a filter for disabling the auto-redirect on wp-login. Once disabling, users will instead be provided with a "Sign in with your Basecamp account" link in the wp-login login form, which, when clicked, will take the user to Basecamp for authentication. To disable the auto-redirect:
+
+```php
+add_filter( 'wp_basecamp_auto_redirect_login', '__return_false' );
+```
 
 Requirements
 ------------
