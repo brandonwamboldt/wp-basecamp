@@ -43,16 +43,31 @@ add_filter( 'wp_basecamp_default_user_level', '__return_false' );
 
 Keep in mind, these roles will be applied when the user first logs in via Basecamp and their user is created in WordPress. After that first login, you can change their user-level, and it will apply for subsequent logins.
 
-There is also a filter for disabling the auto-redirect on wp-login. Once disabling, users will instead be provided with a "Sign in with your Basecamp account" link in the wp-login login form, which, when clicked, will take the user to Basecamp for authentication. To disable the auto-redirect:
+### Additional Filters
+
+Filter for disabling the auto-redirect on wp-login. Once disabling, users will instead be provided with a "Sign in with your Basecamp account" link in the wp-login login form, which, when clicked, will take the user to Basecamp for authentication. To disable the auto-redirect:
 
 ```php
 add_filter( 'wp_basecamp_auto_redirect_login', '__return_false' );
 ```
 
+Filter for modifying the auto-created usernames. By default it creates the username in the pattern of "first-last". If it finds a user in WordPress with that username, it will then append the Basecamp userid to the username, "first-last-5555555". The filter gets passed the array of identity information provided from the API, so if you preferred to change the username to the user's email, you could do so like:
+
+```php
+function wp_basecamp_username_email( $username, $identity ) {
+	if ( isset( $identity['email_address'] ) ) {
+		$username = $identity['email_address'];
+	}
+
+	return $username;
+}
+add_filter( 'wp_basecamp_username', 'wp_basecamp_username_email', 10, 2 );
+```
+
 Requirements
 ------------
 
-The OAuth2 library I'm using requires the [PHP cURL](http://www.php.net/manual/en/book.curl.php) extension to be installed.
+The OAuth2 library in use in this plugin requires the [PHP cURL](http://www.php.net/manual/en/book.curl.php) extension to be installed.
 
 Author
 ------

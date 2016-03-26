@@ -125,10 +125,13 @@ class WordPressBasecampCore {
     // Get authorization info
     $response = $client->fetch( WP_BASECAMP_AUTH_INFO_ENDPOINT );
 
+    $identity = $response['result']['identity'];
+
     // Get the user's email
-    $user_email = $response['result']['identity']['email_address'];
-    $first_name = $response['result']['identity']['first_name'];
-    $last_name  = $response['result']['identity']['last_name'];
+    $bc_user_id = $identity['id'];
+    $user_email = $identity['email_address'];
+    $first_name = $identity['first_name'];
+    $last_name  = $identity['last_name'];
     $full_name  = $first_name . ' ' . $last_name;
 
     // The default WP user level for Basecamp users logging in who are NOT members of your Basecamp org.
@@ -170,10 +173,23 @@ class WordPressBasecampCore {
       'User-Agent' => sprintf('%s (%s)', get_bloginfo('name'), get_bloginfo('admin_email') )
     ));
 
+    $username = sanitize_title_with_dashes( $full_name, '', 'save' );
+    if ( username_exists( $username ) ) {
+      $username .= '-' . $bc_user_id;
+    }
+
+    /**
+     * Filters the username before a user is created.
+     *
+     * @param string $username Generated username. first-last(-id)
+     * @param array  $identity Identity array provided from API.
+     */
+    $username = apply_filters( 'wp_basecamp_username', $username, $identity );
+
     // Create a new user
     // Setup the minimum required user data
     $userdata = array(
-      'user_login'   => wp_slash( $user_email ),
+      'user_login'   => wp_slash( $username ),
       'user_email'   => wp_slash( $user_email ),
       'user_pass'    => wp_generate_password( 20, true ),
       'first_name'   => $first_name,
